@@ -5,7 +5,7 @@ import { HUD } from '../ui/HUD.js'
 
 const WORLD_W = 1400
 const WORLD_H = 1400
-const FOG_RADIUS = 280 // радиус видимости вокруг игрока
+const FOG_RADIUS = 280
 
 export class GameScene extends Phaser.Scene {
   constructor() {
@@ -36,7 +36,7 @@ export class GameScene extends Phaser.Scene {
     this.cameras.main.startFollow(this.player, true, 0.1, 0.1)
     this.cameras.main.setBounds(0, 0, WORLD_W, WORLD_H)
 
-    // Туман — простой Graphics, не двигается с камерой
+    // Туман — плавный градиент через Canvas
     this.createFog()
 
     // HUD поверх тумана
@@ -49,7 +49,7 @@ export class GameScene extends Phaser.Scene {
     this.showHint()
   }
 
-  // ─── Фон ────────────────────────────────────────────────
+  // ─── Фон ─────────────────────────────────────────────────
   createGround() {
     const g = this.add.graphics()
 
@@ -111,7 +111,7 @@ export class GameScene extends Phaser.Scene {
       g.fillStyle(color)
       g.fillCircle(0, -2, 14)
 
-      // Светлое пятно
+      // Светлое пятно на кроне
       g.fillStyle(0x4aaa30, 0.6)
       g.fillCircle(-3, -5, 8)
 
@@ -132,70 +132,73 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
-  // ─── Туман войны ─────────────────────────────────────────
+  // ─── Туман войны — плавный градиент ──────────────────────
   createFog() {
-  this.fogGraphics = this.add.graphics()
-  this.fogGraphics.setDepth(50)
-  this.fogGraphics.setScrollFactor(0)
-}
+    const size = (FOG_RADIUS + 300) * 2
+    const canvas = document.createElement('canvas')
+    canvas.width = size
+    canvas.height = size
 
-updateFog() {
-  const g = this.fogGraphics
-  const cam = this.cameras.main
-  const w = this.scale.width
-  const h = this.scale.height
-  const r = FOG_RADIUS
+    const ctx = canvas.getContext('2d')
+    const cx = size / 2
+    const cy = size / 2
 
-  // Позиция игрока на экране
-  const sx = this.player.x - cam.scrollX
-  const sy = this.player.y - cam.scrollY
+    // Белый фон — всё снаружи белое
+    ctx.fillStyle = 'rgba(255, 255, 255, 1)'
+    ctx.fillRect(0, 0, size, size)
 
-  g.clear()
+    // Радиальный градиент — от прозрачного внутри к белому снаружи
+    const gradient = ctx.createRadialGradient(
+      cx, cy, FOG_RADIUS * 0.5,   // внутри — прозрачно
+      cx, cy, FOG_RADIUS * 1.2    // снаружи — белый
+    )
 
-  const steps = 128
-  const outerR = Math.sqrt(w * w + h * h)
+    gradient.addColorStop(0.0,  'rgba(255,255,255, 0)')    // центр прозрачный
+    gradient.addColorStop(0.4,  'rgba(255,255,255, 0)')    // чёткая зона
+    gradient.addColorStop(0.6,  'rgba(255,255,255, 0.15)') // начало блюра
+    gradient.addColorStop(0.75, 'rgba(255,255,255, 0.5)')  // нарастает
+    gradient.addColorStop(0.88, 'rgba(255,255,255, 0.82)') // почти белый
+    gradient.addColorStop(1.0,  'rgba(255,255,255, 1)')    // полностью белый
 
-  // Белый туман вместо чёрного
-  for (let i = 0; i < steps; i++) {
-    const a1 = (i / steps) * Math.PI * 2
-    const a2 = ((i + 1) / steps) * Math.PI * 2
+    // Вырезаем круг через destination-out
+    ctx.globalCompositeOperation = 'destination-out'
+    ctx.fillStyle = gradient
+    ctx.fillRect(0, 0, size, size)
 
-    const ix1 = sx + Math.cos(a1) * r
-    const iy1 = sy + Math.sin(a1) * r
-    const ix2 = sx + Math.cos(a2) * r
-    const iy2 = sy + Math.sin(a2) * r
+    // Рисуем градиент поверх для плавного перехода
+    ctx.globalCompositeOperation = 'source-over'
+    ctx.fillStyle = gradient
+    ctx.fillRect(0, 0, size, size)
 
-    const ox1 = sx + Math.cos(a1) * outerR
-    const oy1 = sy + Math.sin(a1) * outerR
-    const ox2 = sx + Math.cos(a2) * outerR
-    const oy2 = sy + Math.sin(a2) * outerR
+    // Грузим canvas как текстуру Phaser
+    const key = 'fogTexture'
+    if (this.textures.exists(key)) this.textures.remove(key)
+    this.textures.addCanvas(key, canvas)
 
-    g.fillStyle(0xffffff, 0.92)
-    g.fillTriangle(ix1, iy1, ix2, iy2, ox1, oy1)
-    g.fillTriangle(ix2, iy2, ox2, oy2, ox1, oy1)
+    // Белый прямоугольник — фон тумана на весь экран
+    this.fogOverlay = this.add.graphics()
+    this.fogOverlay.setDepth(49)
+    this.fogOverlay.setScrollFactor(0)
+    this.fogOverlay.fillStyle(0xffffff, 1)
+    this.fogOverlay.fillRect(0, 0, this.scale.width * 3, this.scale.height * 3)
+
+    // Спрайт тумана с прозрачным кругом посередине
+    this.fogSprite = this.add.image(0, 0, key)
+    this.fogSprite.setDepth(50)
+    this.fogSprite.setScrollFactor(0)
+    this.fogSprite.setOrigin(0.5, 0.5)
   }
 
-  // Блюр — много полупрозрачных колец от белого к прозрачному
-  // Снаружи круга — белые кольца нарастают
-  const outerRings = 14
-  for (let i = outerRings; i >= 0; i--) {
-    const alpha = 0.06 + (outerRings - i) * 0.01
-    const radius = r + i * 22
-    g.lineStyle(24, 0xffffff, alpha)
-    g.strokeCircle(sx, sy, radius)
-  }
+  updateFog() {
+    const cam = this.cameras.main
 
-  // Внутри круга — белые кольца затухают к центру
-  const innerRings = 8
-  for (let i = 0; i < innerRings; i++) {
-    const alpha = 0.18 - i * 0.022
-    const radius = r - i * 20
-    if (radius > 0) {
-      g.lineStyle(22, 0xffffff, alpha)
-      g.strokeCircle(sx, sy, radius)
-    }
+    // Позиция игрока на экране (не в мире)
+    const sx = this.player.x - cam.scrollX
+    const sy = this.player.y - cam.scrollY
+
+    // Спрайт тумана следует за игроком
+    this.fogSprite.setPosition(sx, sy)
   }
-}
 
   // ─── Джойстик ────────────────────────────────────────────
   createJoystick() {
@@ -213,7 +216,7 @@ updateFog() {
     this.joystickGraphics = this.add.graphics()
     this.joystickGraphics.setDepth(100).setScrollFactor(0)
 
-        this.input.on('pointerdown', (p) => {
+    this.input.on('pointerdown', (p) => {
       // Джойстик только в левой половине экрана
       if (p.x < this.scale.width / 2) {
         this.joystick.active = true
@@ -268,15 +271,15 @@ updateFog() {
     const sy = this.joystick.stickY
 
     // База — большой полупрозрачный круг
-    g.fillStyle(0xffffff, 0.12)
+    g.fillStyle(0x000000, 0.12)
     g.fillCircle(bx, by, 55)
-    g.lineStyle(2, 0xffffff, 0.25)
+    g.lineStyle(2, 0x000000, 0.25)
     g.strokeCircle(bx, by, 55)
 
     // Стик — маленький круг
-    g.fillStyle(0xffffff, 0.30)
+    g.fillStyle(0x000000, 0.25)
     g.fillCircle(sx, sy, 26)
-    g.lineStyle(2, 0xffffff, 0.45)
+    g.lineStyle(2, 0x000000, 0.4)
     g.strokeCircle(sx, sy, 26)
   }
 
@@ -370,8 +373,8 @@ updateFog() {
       {
         fontFamily: 'monospace',
         fontSize: '18px',
-        color: '#ffffff',
-        stroke: '#000000',
+        color: '#333333',
+        stroke: '#ffffff',
         strokeThickness: 4,
         align: 'center'
       }
@@ -396,7 +399,7 @@ updateFog() {
     const best = parseInt(localStorage.getItem('bestScore')) || 0
     if (score > best) localStorage.setItem('bestScore', score)
 
-    this.cameras.main.flash(400, 200, 50, 50)
+    this.cameras.main.flash(400, 255, 255, 255)
     this.cameras.main.shake(300, 0.015)
 
     this.time.delayedCall(500, () => {
