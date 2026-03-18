@@ -5,7 +5,7 @@ import { HUD } from '../ui/HUD.js'
 
 const WORLD_W = 1400
 const WORLD_H = 1400
-const FOG_RADIUS = 320 // радиус видимости вокруг игрока
+const FOG_RADIUS = 280 // радиус видимости вокруг игрока
 
 export class GameScene extends Phaser.Scene {
   constructor() {
@@ -36,7 +36,7 @@ export class GameScene extends Phaser.Scene {
     this.cameras.main.startFollow(this.player, true, 0.1, 0.1)
     this.cameras.main.setBounds(0, 0, WORLD_W, WORLD_H)
 
-    // Туман войны — рисуется поверх всего
+    // Туман — простой Graphics, не двигается с камерой
     this.createFog()
 
     // HUD поверх тумана
@@ -49,7 +49,7 @@ export class GameScene extends Phaser.Scene {
     this.showHint()
   }
 
-  // Трава + грунтовые дорожки
+  // ─── Фон ────────────────────────────────────────────────
   createGround() {
     const g = this.add.graphics()
 
@@ -79,54 +79,50 @@ export class GameScene extends Phaser.Scene {
     g.strokeRect(2, 2, WORLD_W - 4, WORLD_H - 4)
   }
 
-  // Деревья вместо квадратов
+  // ─── Деревья ─────────────────────────────────────────────
   spawnObstacles(count) {
-  const margin = 80
-  const centerZone = 180
-  const treeColors = [0x2d6a1f, 0x3a8a25, 0x2a7a1a, 0x4a9a30]
+    const margin = 80
+    const centerZone = 180
+    const treeColors = [0x2d6a1f, 0x3a8a25, 0x2a7a1a, 0x4a9a30]
 
-  for (let i = 0; i < count; i++) {
-    let x, y
+    for (let i = 0; i < count; i++) {
+      let x, y
 
-    do {
-      x = Phaser.Math.Between(margin, WORLD_W - margin)
-      y = Phaser.Math.Between(margin, WORLD_H - margin)
-    } while (
-      Math.abs(x - WORLD_W / 2) < centerZone &&
-      Math.abs(y - WORLD_H / 2) < centerZone
-    )
+      do {
+        x = Phaser.Math.Between(margin, WORLD_W - margin)
+        y = Phaser.Math.Between(margin, WORLD_H - margin)
+      } while (
+        Math.abs(x - WORLD_W / 2) < centerZone &&
+        Math.abs(y - WORLD_H / 2) < centerZone
+      )
 
-    const g = this.add.graphics()
+      const g = this.add.graphics()
 
-    // Ствол
-    g.fillStyle(0x8B5E3C)
-    g.fillRect(-4, 4, 8, 12)
+      // Ствол
+      g.fillStyle(0x8B5E3C)
+      g.fillRect(-4, 4, 8, 12)
 
-    // Тень кроны
-    g.fillStyle(0x1a4a10, 0.5)
-    g.fillCircle(3, 3, 14)
+      // Тень кроны
+      g.fillStyle(0x1a4a10, 0.5)
+      g.fillCircle(3, 3, 14)
 
-    // Основная крона — случайный оттенок зелёного
-    const color = treeColors[i % treeColors.length]
-    g.fillStyle(color)
-    g.fillCircle(0, -2, 14)
+      // Основная крона
+      const color = treeColors[i % treeColors.length]
+      g.fillStyle(color)
+      g.fillCircle(0, -2, 14)
 
-    // Светлое пятно
-    g.fillStyle(0x4aaa30, 0.6)
-    g.fillCircle(-3, -5, 8)
+      // Светлое пятно
+      g.fillStyle(0x4aaa30, 0.6)
+      g.fillCircle(-3, -5, 8)
 
-    g.x = x
-    g.y = y
+      g.x = x
+      g.y = y
 
-    this.obstacleList.push({
-      rect: g,
-      x, y,
-      size: 28,
-      alive: true
-    })
+      this.obstacleList.push({ rect: g, x, y, size: 28, alive: true })
+    }
   }
-}
 
+  // ─── NPC ─────────────────────────────────────────────────
   spawnNPCs(count) {
     for (let i = 0; i < count; i++) {
       const x = Phaser.Math.Between(100, WORLD_W - 100)
@@ -136,44 +132,79 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
-  // Туман войны — чёрная маска с дыркой вокруг игрока
+  // ─── Туман войны ─────────────────────────────────────────
   createFog() {
-    // Отдельная камера для тумана не нужна
-    // Рисуем через RenderTexture поверх всей сцены
-    this.fogTexture = this.add
-      .renderTexture(0, 0, WORLD_W, WORLD_H)
-      .setDepth(50)    // поверх всех объектов
-      .setScrollFactor(1) // двигается вместе с камерой
-
-    // Кисть для "дырки" в тумане
-    this.fogBrush = this.make.graphics({ x: 0, y: 0, add: false })
+    // Graphics фиксирован на экране (scrollFactor 0)
+    this.fogGraphics = this.add.graphics()
+    this.fogGraphics.setDepth(50)
+    this.fogGraphics.setScrollFactor(0)
   }
 
   updateFog() {
-    const px = this.player.x
-    const py = this.player.y
+    const g = this.fogGraphics
+    const cam = this.cameras.main
+    const w = this.scale.width
+    const h = this.scale.height
     const r = FOG_RADIUS
 
-    // Заливаем туман
-    this.fogTexture.clear()
-    this.fogTexture.fill(0x000000, 0.82)
+    // Позиция игрока на экране
+    const sx = this.player.x - cam.scrollX
+    const sy = this.player.y - cam.scrollY
 
-    // Вырезаем круг видимости через blendMode ERASE
-    this.fogBrush.clear()
-    this.fogBrush.fillStyle(0xffffff)
+    g.clear()
 
-    // Градиентный край — несколько кругов с убыванием прозрачности
-    for (let i = 0; i < 6; i++) {
-      const alpha = 1 - i * 0.18
-      const radius = r - i * 18
-      this.fogBrush.fillStyle(0xffffff, alpha)
-      this.fogBrush.fillCircle(px, py, radius)
+    // Рисуем 4 прямоугольника вокруг круга — закрываем углы
+    g.fillStyle(0x000000, 0.88)
+
+    // Сверху
+    g.fillRect(0, 0, w, sy - r)
+    // Снизу
+    g.fillRect(0, sy + r, w, h - (sy + r))
+    // Слева (между верхним и нижним)
+    g.fillRect(0, sy - r, sx - r, r * 2)
+    // Справа
+    g.fillRect(sx + r, sy - r, w - (sx + r), r * 2)
+
+    // Скругляем края — заполняем углы треугольниками
+    // Делаем много маленьких треугольников по окружности
+    const steps = 48
+    for (let i = 0; i < steps; i++) {
+      const a1 = (i / steps) * Math.PI * 2
+      const a2 = ((i + 1) / steps) * Math.PI * 2
+
+      const x1 = sx + Math.cos(a1) * r
+      const y1 = sy + Math.sin(a1) * r
+      const x2 = sx + Math.cos(a2) * r
+      const y2 = sy + Math.sin(a2) * r
+
+      // Точка за пределами круга — заполняем угол
+      const midAngle = (a1 + a2) / 2
+      const ox = sx + Math.cos(midAngle) * (r + 2)
+      const oy = sy + Math.sin(midAngle) * (r + 2)
+
+      // Определяем в каком прямоугольнике этот угол
+      // и рисуем треугольник только если он в "угловой" зоне
+      const inCorner = (
+        (ox < sx - r || ox > sx + r) ||
+        (oy < sy - r || oy > sy + r)
+      )
+
+      if (inCorner) {
+        g.fillStyle(0x000000, 0.88)
+        g.fillTriangle(x1, y1, x2, y2, ox, oy)
+      }
     }
 
-    this.fogTexture.erase(this.fogBrush, 0, 0)
+    // Мягкий край тумана — кольца с убыванием прозрачности
+    for (let i = 0; i < 6; i++) {
+      const alpha = 0.18 - i * 0.025
+      const radius = r + i * 16
+      g.lineStyle(18, 0x000000, alpha)
+      g.strokeCircle(sx, sy, radius)
+    }
   }
 
-  // Джойстик для мобилки
+  // ─── Джойстик ────────────────────────────────────────────
   createJoystick() {
     this.joystick = {
       active: false,
@@ -186,14 +217,11 @@ export class GameScene extends Phaser.Scene {
       pointerId: null
     }
 
-    // Визуал джойстика
-    const jg = this.add.graphics()
-    this.joystickGraphics = jg
+    this.joystickGraphics = this.add.graphics()
     this.joystickGraphics.setDepth(100).setScrollFactor(0)
 
-    // Слушаем тач
-    this.input.on('pointerdown', (p) => {
-      // Джойстик только если тап в левой половине экрана
+        this.input.on('pointerdown', (p) => {
+      // Джойстик только в левой половине экрана
       if (p.x < this.scale.width / 2) {
         this.joystick.active = true
         this.joystick.pointerId = p.id
@@ -219,7 +247,7 @@ export class GameScene extends Phaser.Scene {
           this.joystick.stickY = p.y
         }
 
-        // Нормализованное направление
+        // Нормализованное направление -1..1
         this.joystick.dx = (this.joystick.stickX - this.joystick.baseX) / maxDist
         this.joystick.dy = (this.joystick.stickY - this.joystick.baseY) / maxDist
       }
@@ -246,19 +274,20 @@ export class GameScene extends Phaser.Scene {
     const sx = this.joystick.stickX
     const sy = this.joystick.stickY
 
-    // База
-    g.fillStyle(0xffffff, 0.15)
+    // База — большой полупрозрачный круг
+    g.fillStyle(0xffffff, 0.12)
     g.fillCircle(bx, by, 55)
-    g.lineStyle(2, 0xffffff, 0.3)
+    g.lineStyle(2, 0xffffff, 0.25)
     g.strokeCircle(bx, by, 55)
 
-    // Стик
-    g.fillStyle(0xffffff, 0.35)
+    // Стик — маленький круг
+    g.fillStyle(0xffffff, 0.30)
     g.fillCircle(sx, sy, 26)
-    g.lineStyle(2, 0xffffff, 0.5)
+    g.lineStyle(2, 0xffffff, 0.45)
     g.strokeCircle(sx, sy, 26)
   }
 
+  // ─── Коллизии ────────────────────────────────────────────
   setupCollisions() {
     this.physics.add.collider(this.npcs, this.npcs)
 
@@ -314,6 +343,7 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
+  // ─── Эффекты ─────────────────────────────────────────────
   showBreakEffect(x, y) {
     const colors = [0x2d6a1f, 0x4aaa30, 0x1a4a10, 0x8B5E3C]
     for (let i = 0; i < 5; i++) {
@@ -364,6 +394,7 @@ export class GameScene extends Phaser.Scene {
     })
   }
 
+  // ─── Конец игры ──────────────────────────────────────────
   gameOver() {
     if (this.isGameOver) return
     this.isGameOver = true
@@ -380,17 +411,15 @@ export class GameScene extends Phaser.Scene {
     })
   }
 
+  // ─── Главный цикл ────────────────────────────────────────
   update(time, delta) {
     if (this.isGameOver) return
 
-    // Передаём джойстик в player
     this.player.update(this.input.activePointer, this.joystick)
     this.monster.chasePlayer(this.player)
     this.hud.update(delta)
 
     this.checkObstacleCollisions()
-
-    // Обновляем туман и джойстик каждый кадр
     this.updateFog()
     this.drawJoystick()
   }
