@@ -134,75 +134,61 @@ export class GameScene extends Phaser.Scene {
 
   // ─── Туман войны ─────────────────────────────────────────
   createFog() {
-    // Graphics фиксирован на экране (scrollFactor 0)
-    this.fogGraphics = this.add.graphics()
-    this.fogGraphics.setDepth(50)
-    this.fogGraphics.setScrollFactor(0)
+  this.fogGraphics = this.add.graphics()
+  this.fogGraphics.setDepth(50)
+  this.fogGraphics.setScrollFactor(0)
+}
+
+updateFog() {
+  const g = this.fogGraphics
+  const cam = this.cameras.main
+  const w = this.scale.width
+  const h = this.scale.height
+  const r = FOG_RADIUS
+
+  // Позиция игрока на экране
+  const sx = this.player.x - cam.scrollX
+  const sy = this.player.y - cam.scrollY
+
+  g.clear()
+
+  // Рисуем туман как множество треугольников от центра игрока
+  // Каждый треугольник — от края круга до края экрана
+  // Так получается идеальный круглый вырез
+  const steps = 128 // чем больше — тем плавнее круг
+  const outerR = Math.sqrt(w * w + h * h) // гарантированно покрывает весь экран
+
+  for (let i = 0; i < steps; i++) {
+    const a1 = (i / steps) * Math.PI * 2
+    const a2 = ((i + 1) / steps) * Math.PI * 2
+
+    // Внутренние точки — на краю круга видимости
+    const ix1 = sx + Math.cos(a1) * r
+    const iy1 = sy + Math.sin(a1) * r
+    const ix2 = sx + Math.cos(a2) * r
+    const iy2 = sy + Math.sin(a2) * r
+
+    // Внешние точки — далеко за экраном
+    const ox1 = sx + Math.cos(a1) * outerR
+    const oy1 = sy + Math.sin(a1) * outerR
+    const ox2 = sx + Math.cos(a2) * outerR
+    const oy2 = sy + Math.sin(a2) * outerR
+
+    // Трапеция = 2 треугольника
+    g.fillStyle(0x000000, 0.92)
+    g.fillTriangle(ix1, iy1, ix2, iy2, ox1, oy1)
+    g.fillTriangle(ix2, iy2, ox2, oy2, ox1, oy1)
   }
 
-  updateFog() {
-    const g = this.fogGraphics
-    const cam = this.cameras.main
-    const w = this.scale.width
-    const h = this.scale.height
-    const r = FOG_RADIUS
-
-    // Позиция игрока на экране
-    const sx = this.player.x - cam.scrollX
-    const sy = this.player.y - cam.scrollY
-
-    g.clear()
-
-    // Рисуем 4 прямоугольника вокруг круга — закрываем углы
-    g.fillStyle(0x000000, 0.88)
-
-    // Сверху
-    g.fillRect(0, 0, w, sy - r)
-    // Снизу
-    g.fillRect(0, sy + r, w, h - (sy + r))
-    // Слева (между верхним и нижним)
-    g.fillRect(0, sy - r, sx - r, r * 2)
-    // Справа
-    g.fillRect(sx + r, sy - r, w - (sx + r), r * 2)
-
-    // Скругляем края — заполняем углы треугольниками
-    // Делаем много маленьких треугольников по окружности
-    const steps = 48
-    for (let i = 0; i < steps; i++) {
-      const a1 = (i / steps) * Math.PI * 2
-      const a2 = ((i + 1) / steps) * Math.PI * 2
-
-      const x1 = sx + Math.cos(a1) * r
-      const y1 = sy + Math.sin(a1) * r
-      const x2 = sx + Math.cos(a2) * r
-      const y2 = sy + Math.sin(a2) * r
-
-      // Точка за пределами круга — заполняем угол
-      const midAngle = (a1 + a2) / 2
-      const ox = sx + Math.cos(midAngle) * (r + 2)
-      const oy = sy + Math.sin(midAngle) * (r + 2)
-
-      // Определяем в каком прямоугольнике этот угол
-      // и рисуем треугольник только если он в "угловой" зоне
-      const inCorner = (
-        (ox < sx - r || ox > sx + r) ||
-        (oy < sy - r || oy > sy + r)
-      )
-
-      if (inCorner) {
-        g.fillStyle(0x000000, 0.88)
-        g.fillTriangle(x1, y1, x2, y2, ox, oy)
-      }
-    }
-
-    // Мягкий край тумана — кольца с убыванием прозрачности
-    for (let i = 0; i < 6; i++) {
-      const alpha = 0.18 - i * 0.025
-      const radius = r + i * 16
-      g.lineStyle(18, 0x000000, alpha)
-      g.strokeCircle(sx, sy, radius)
-    }
+  // Мягкий градиентный край — кольца снаружи круга
+  const ringCount = 8
+  for (let i = 0; i < ringCount; i++) {
+    const alpha = 0.12 - i * 0.012
+    const radius = r + i * 18
+    g.lineStyle(20, 0x000000, alpha)
+    g.strokeCircle(sx, sy, radius)
   }
+}
 
   // ─── Джойстик ────────────────────────────────────────────
   createJoystick() {
