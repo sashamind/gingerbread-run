@@ -5,11 +5,14 @@ import { GameOverScene } from './scenes/GameOverScene.js'
 
 const config = {
   type: Phaser.AUTO,
-  // Убираем фиксированные width/height
-  // Phaser сам возьмёт размер окна
   width: window.innerWidth,
   height: window.innerHeight,
-  backgroundColor: '#1a1a2e',
+  backgroundColor: '#5a7a3a', // зелёная трава как на скрине
+  render: {
+    pixelArt: false,
+    antialias: true,
+    roundPixels: true  // ← убирает мыльность текста
+  },
   physics: {
     default: 'arcade',
     arcade: {
@@ -18,7 +21,7 @@ const config = {
     }
   },
   scale: {
-    mode: Phaser.Scale.RESIZE,   // ← растягивается под любой экран
+    mode: Phaser.Scale.RESIZE,
     autoCenter: Phaser.Scale.CENTER_BOTH,
     width: window.innerWidth,
     height: window.innerHeight,
