@@ -32,18 +32,15 @@ export class GameScene extends Phaser.Scene {
     this.player = new Player(this, WORLD_W / 2, WORLD_H / 2)
     this.monster = new Monster(this, WORLD_W / 2 + 280, WORLD_H / 2 + 280)
 
-    // Камера
+    // Камера следит за игроком
     this.cameras.main.startFollow(this.player, true, 0.1, 0.1)
     this.cameras.main.setBounds(0, 0, WORLD_W, WORLD_H)
 
-    // Туман — плавный градиент через Canvas
+    // Туман войны
     this.createFog()
 
     // HUD поверх тумана
     this.hud = new HUD(this)
-
-    // Джойстик
-    this.createJoystick()
 
     this.setupCollisions()
     this.showHint()
@@ -87,7 +84,6 @@ export class GameScene extends Phaser.Scene {
 
     for (let i = 0; i < count; i++) {
       let x, y
-
       do {
         x = Phaser.Math.Between(margin, WORLD_W - margin)
         y = Phaser.Math.Between(margin, WORLD_H - margin)
@@ -132,161 +128,70 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
-  // ─── Туман войны — плавный градиент ──────────────────────
+  // ─── Туман войны ─────────────────────────────────────────
   createFog() {
-    const size = (FOG_RADIUS + 300) * 2
-    const canvas = document.createElement('canvas')
-    canvas.width = size
-    canvas.height = size
+    this._buildFogTexture()
 
-    const ctx = canvas.getContext('2d')
-    const cx = size / 2
-    const cy = size / 2
-
-    // Белый фон — всё снаружи белое
-    ctx.fillStyle = 'rgba(255, 255, 255, 1)'
-    ctx.fillRect(0, 0, size, size)
-
-    // Радиальный градиент — от прозрачного внутри к белому снаружи
-    const gradient = ctx.createRadialGradient(
-      cx, cy, FOG_RADIUS * 0.5,   // внутри — прозрачно
-      cx, cy, FOG_RADIUS * 1.2    // снаружи — белый
-    )
-
-    gradient.addColorStop(0.0,  'rgba(255,255,255, 0)')    // центр прозрачный
-    gradient.addColorStop(0.4,  'rgba(255,255,255, 0)')    // чёткая зона
-    gradient.addColorStop(0.6,  'rgba(255,255,255, 0.15)') // начало блюра
-    gradient.addColorStop(0.75, 'rgba(255,255,255, 0.5)')  // нарастает
-    gradient.addColorStop(0.88, 'rgba(255,255,255, 0.82)') // почти белый
-    gradient.addColorStop(1.0,  'rgba(255,255,255, 1)')    // полностью белый
-
-    // Вырезаем круг через destination-out
-    ctx.globalCompositeOperation = 'destination-out'
-    ctx.fillStyle = gradient
-    ctx.fillRect(0, 0, size, size)
-
-    // Рисуем градиент поверх для плавного перехода
-    ctx.globalCompositeOperation = 'source-over'
-    ctx.fillStyle = gradient
-    ctx.fillRect(0, 0, size, size)
-
-    // Грузим canvas как текстуру Phaser
-    const key = 'fogTexture'
-    if (this.textures.exists(key)) this.textures.remove(key)
-    this.textures.addCanvas(key, canvas)
-
-    // Белый прямоугольник — фон тумана на весь экран
-    this.fogOverlay = this.add.graphics()
-    this.fogOverlay.setDepth(49)
-    this.fogOverlay.setScrollFactor(0)
-    this.fogOverlay.fillStyle(0xffffff, 1)
-    this.fogOverlay.fillRect(0, 0, this.scale.width * 3, this.scale.height * 3)
-
-    // Спрайт тумана с прозрачным кругом посередине
-    this.fogSprite = this.add.image(0, 0, key)
+    // Спрайт тумана — зафиксирован на экране, двигаем вручную
+    this.fogSprite = this.add.image(0, 0, 'fog')
     this.fogSprite.setDepth(50)
     this.fogSprite.setScrollFactor(0)
     this.fogSprite.setOrigin(0.5, 0.5)
   }
 
+  _buildFogTexture() {
+    // Размер с запасом — покрывает любой экран
+    const size = 1400
+    const cx = size / 2
+    const cy = size / 2
+
+    const canvas = document.createElement('canvas')
+    canvas.width = size
+    canvas.height = size
+    const ctx = canvas.getContext('2d')
+
+    // Шаг 1 — белый непрозрачный фон (это и есть туман)
+    ctx.fillStyle = 'rgba(236, 232, 220, 1)'
+    ctx.fillRect(0, 0, size, size)
+
+    // Шаг 2 — вырезаем круг с мягким краем
+    // destination-out стирает пиксели там где рисуем
+    const innerR = FOG_RADIUS * 0.6  // начало блюра
+    const outerR = FOG_RADIUS * 1.4  // конец блюра
+
+    const grad = ctx.createRadialGradient(cx, cy, innerR, cx, cy, outerR)
+    grad.addColorStop(0,    'rgba(0,0,0, 1)')    // полностью прозрачно — видно игру
+    grad.addColorStop(0.4,  'rgba(0,0,0, 0.98)')
+    grad.addColorStop(0.65, 'rgba(0,0,0, 0.85)')
+    grad.addColorStop(0.82, 'rgba(0,0,0, 0.5)')
+    grad.addColorStop(0.93, 'rgba(0,0,0, 0.15)')
+    grad.addColorStop(1,    'rgba(0,0,0, 0)')    // полностью туман
+
+    ctx.globalCompositeOperation = 'destination-out'
+    ctx.fillStyle = grad
+    ctx.fillRect(0, 0, size, size)
+
+    // Загружаем в Phaser как текстуру
+    if (this.textures.exists('fog')) this.textures.remove('fog')
+    this.textures.addCanvas('fog', canvas)
+  }
+
   updateFog() {
     const cam = this.cameras.main
 
-    // Позиция игрока на экране (не в мире)
+    // Переводим мировые координаты игрока в экранные
     const sx = this.player.x - cam.scrollX
     const sy = this.player.y - cam.scrollY
 
-    // Спрайт тумана следует за игроком
+    // Спрайт следует за игроком по экрану
     this.fogSprite.setPosition(sx, sy)
-  }
-
-  // ─── Джойстик ────────────────────────────────────────────
-  createJoystick() {
-    this.joystick = {
-      active: false,
-      baseX: 0,
-      baseY: 0,
-      stickX: 0,
-      stickY: 0,
-      dx: 0,
-      dy: 0,
-      pointerId: null
-    }
-
-    this.joystickGraphics = this.add.graphics()
-    this.joystickGraphics.setDepth(100).setScrollFactor(0)
-
-    this.input.on('pointerdown', (p) => {
-      // Джойстик только в левой половине экрана
-      if (p.x < this.scale.width / 2) {
-        this.joystick.active = true
-        this.joystick.pointerId = p.id
-        this.joystick.baseX = p.x
-        this.joystick.baseY = p.y
-        this.joystick.stickX = p.x
-        this.joystick.stickY = p.y
-      }
-    })
-
-    this.input.on('pointermove', (p) => {
-      if (this.joystick.active && p.id === this.joystick.pointerId) {
-        const dx = p.x - this.joystick.baseX
-        const dy = p.y - this.joystick.baseY
-        const dist = Math.sqrt(dx * dx + dy * dy)
-        const maxDist = 55
-
-        if (dist > maxDist) {
-          this.joystick.stickX = this.joystick.baseX + (dx / dist) * maxDist
-          this.joystick.stickY = this.joystick.baseY + (dy / dist) * maxDist
-        } else {
-          this.joystick.stickX = p.x
-          this.joystick.stickY = p.y
-        }
-
-        // Нормализованное направление -1..1
-        this.joystick.dx = (this.joystick.stickX - this.joystick.baseX) / maxDist
-        this.joystick.dy = (this.joystick.stickY - this.joystick.baseY) / maxDist
-      }
-    })
-
-    this.input.on('pointerup', (p) => {
-      if (p.id === this.joystick.pointerId) {
-        this.joystick.active = false
-        this.joystick.dx = 0
-        this.joystick.dy = 0
-        this.joystickGraphics.clear()
-      }
-    })
-  }
-
-  drawJoystick() {
-    if (!this.joystick.active) return
-
-    const g = this.joystickGraphics
-    g.clear()
-
-    const bx = this.joystick.baseX
-    const by = this.joystick.baseY
-    const sx = this.joystick.stickX
-    const sy = this.joystick.stickY
-
-    // База — большой полупрозрачный круг
-    g.fillStyle(0x000000, 0.12)
-    g.fillCircle(bx, by, 55)
-    g.lineStyle(2, 0x000000, 0.25)
-    g.strokeCircle(bx, by, 55)
-
-    // Стик — маленький круг
-    g.fillStyle(0x000000, 0.25)
-    g.fillCircle(sx, sy, 26)
-    g.lineStyle(2, 0x000000, 0.4)
-    g.strokeCircle(sx, sy, 26)
   }
 
   // ─── Коллизии ────────────────────────────────────────────
   setupCollisions() {
     this.physics.add.collider(this.npcs, this.npcs)
 
+    // Монстр врезается в NPC — оглушается
     this.physics.add.collider(
       this.monster,
       this.npcs,
@@ -295,6 +200,7 @@ export class GameScene extends Phaser.Scene {
 
     this.physics.add.collider(this.player, this.npcs)
 
+    // Монстр догнал игрока — конец игры
     this.physics.add.overlap(this.monster, this.player, () => {
       this.gameOver()
     })
@@ -308,12 +214,14 @@ export class GameScene extends Phaser.Scene {
     for (const obs of this.obstacleList) {
       if (!obs.alive) continue
 
+      // Игрок врезался в дерево — отталкиваем
       const pdx = Math.abs(this.player.x - obs.x)
       const pdy = Math.abs(this.player.y - obs.y)
       if (pdx < PLAYER_HALF + HALF && pdy < PLAYER_HALF + HALF) {
         this.pushAway(this.player, obs, PLAYER_HALF + HALF)
       }
 
+      // Монстр врезался в дерево — ломает его
       const mdx = Math.abs(this.monster.x - obs.x)
       const mdy = Math.abs(this.monster.y - obs.y)
       if (mdx < MONSTER_HALF + HALF && mdy < MONSTER_HALF + HALF) {
@@ -324,6 +232,7 @@ export class GameScene extends Phaser.Scene {
       }
     }
 
+    // Убираем сломанные деревья из списка
     this.obstacleList = this.obstacleList.filter(o => o.alive)
   }
 
@@ -369,7 +278,7 @@ export class GameScene extends Phaser.Scene {
     const hint = this.add.text(
       this.scale.width / 2,
       this.scale.height / 2 - 120,
-      '🏃 веди курсором / джойстик!\n🍪 пряник догоняет...',
+      '🏃 веди курсором!\n🍪 пряник догоняет...',
       {
         fontFamily: 'monospace',
         fontSize: '18px',
@@ -411,12 +320,12 @@ export class GameScene extends Phaser.Scene {
   update(time, delta) {
     if (this.isGameOver) return
 
-    this.player.update(this.input.activePointer, this.joystick)
+    // Джойстик убран — только мышь/тач
+    this.player.update(this.input.activePointer)
     this.monster.chasePlayer(this.player)
     this.hud.update(delta)
 
     this.checkObstacleCollisions()
     this.updateFog()
-    this.drawJoystick()
   }
 }
