@@ -152,41 +152,48 @@ updateFog() {
 
   g.clear()
 
-  // Рисуем туман как множество треугольников от центра игрока
-  // Каждый треугольник — от края круга до края экрана
-  // Так получается идеальный круглый вырез
-  const steps = 128 // чем больше — тем плавнее круг
-  const outerR = Math.sqrt(w * w + h * h) // гарантированно покрывает весь экран
+  const steps = 128
+  const outerR = Math.sqrt(w * w + h * h)
 
+  // Белый туман вместо чёрного
   for (let i = 0; i < steps; i++) {
     const a1 = (i / steps) * Math.PI * 2
     const a2 = ((i + 1) / steps) * Math.PI * 2
 
-    // Внутренние точки — на краю круга видимости
     const ix1 = sx + Math.cos(a1) * r
     const iy1 = sy + Math.sin(a1) * r
     const ix2 = sx + Math.cos(a2) * r
     const iy2 = sy + Math.sin(a2) * r
 
-    // Внешние точки — далеко за экраном
     const ox1 = sx + Math.cos(a1) * outerR
     const oy1 = sy + Math.sin(a1) * outerR
     const ox2 = sx + Math.cos(a2) * outerR
     const oy2 = sy + Math.sin(a2) * outerR
 
-    // Трапеция = 2 треугольника
-    g.fillStyle(0x000000, 0.92)
+    g.fillStyle(0xffffff, 0.92)
     g.fillTriangle(ix1, iy1, ix2, iy2, ox1, oy1)
     g.fillTriangle(ix2, iy2, ox2, oy2, ox1, oy1)
   }
 
-  // Мягкий градиентный край — кольца снаружи круга
-  const ringCount = 8
-  for (let i = 0; i < ringCount; i++) {
-    const alpha = 0.12 - i * 0.012
-    const radius = r + i * 18
-    g.lineStyle(20, 0x000000, alpha)
+  // Блюр — много полупрозрачных колец от белого к прозрачному
+  // Снаружи круга — белые кольца нарастают
+  const outerRings = 14
+  for (let i = outerRings; i >= 0; i--) {
+    const alpha = 0.06 + (outerRings - i) * 0.01
+    const radius = r + i * 22
+    g.lineStyle(24, 0xffffff, alpha)
     g.strokeCircle(sx, sy, radius)
+  }
+
+  // Внутри круга — белые кольца затухают к центру
+  const innerRings = 8
+  for (let i = 0; i < innerRings; i++) {
+    const alpha = 0.18 - i * 0.022
+    const radius = r - i * 20
+    if (radius > 0) {
+      g.lineStyle(22, 0xffffff, alpha)
+      g.strokeCircle(sx, sy, radius)
+    }
   }
 }
 
