@@ -81,56 +81,51 @@ export class GameScene extends Phaser.Scene {
 
   // Деревья вместо квадратов
   spawnObstacles(count) {
-    const margin = 80
-    const centerZone = 180
+  const margin = 80
+  const centerZone = 180
+  const treeColors = [0x2d6a1f, 0x3a8a25, 0x2a7a1a, 0x4a9a30]
 
-    for (let i = 0; i < count; i++) {
-      let x, y
+  for (let i = 0; i < count; i++) {
+    let x, y
 
-      do {
-        x = Phaser.Math.Between(margin, WORLD_W - margin)
-        y = Phaser.Math.Between(margin, WORLD_H - margin)
-      } while (
-        Math.abs(x - WORLD_W / 2) < centerZone &&
-        Math.abs(y - WORLD_H / 2) < centerZone
-      )
+    do {
+      x = Phaser.Math.Between(margin, WORLD_W - margin)
+      y = Phaser.Math.Between(margin, WORLD_H - margin)
+    } while (
+      Math.abs(x - WORLD_W / 2) < centerZone &&
+      Math.abs(y - WORLD_H / 2) < centerZone
+    )
 
-      // Дерево = круг + маленький ствол
-      const g = this.add.graphics()
+    const g = this.add.graphics()
 
-      // Ствол
-      g.fillStyle(0x8B5E3C)
-      g.fillRect(-4, 4, 8, 12)
+    // Ствол
+    g.fillStyle(0x8B5E3C)
+    g.fillRect(-4, 4, 8, 12)
 
-      // Крона — несколько кругов для объёма
-      const shade = Phaser.Math.Between(0, 30)
-      g.fillStyle(Phaser.Utils.GetValue(
-        { c: 0x2d6a1f + shade * 0x000100 }, 'c', 0x2d6a1f
-      ))
+    // Тень кроны
+    g.fillStyle(0x1a4a10, 0.5)
+    g.fillCircle(3, 3, 14)
 
-      // Тень кроны
-      g.fillStyle(0x1a4a10, 0.5)
-      g.fillCircle(3, 3, 14)
+    // Основная крона — случайный оттенок зелёного
+    const color = treeColors[i % treeColors.length]
+    g.fillStyle(color)
+    g.fillCircle(0, -2, 14)
 
-      // Основная крона
-      g.fillStyle(0x3a8a25)
-      g.fillCircle(0, -2, 14)
+    // Светлое пятно
+    g.fillStyle(0x4aaa30, 0.6)
+    g.fillCircle(-3, -5, 8)
 
-      // Светлое пятно
-      g.fillStyle(0x4aaa30, 0.6)
-      g.fillCircle(-3, -5, 8)
+    g.x = x
+    g.y = y
 
-      g.x = x
-      g.y = y
-
-      this.obstacleList.push({
-        rect: g,
-        x, y,
-        size: 28,
-        alive: true
-      })
-    }
+    this.obstacleList.push({
+      rect: g,
+      x, y,
+      size: 28,
+      alive: true
+    })
   }
+}
 
   spawnNPCs(count) {
     for (let i = 0; i < count; i++) {
