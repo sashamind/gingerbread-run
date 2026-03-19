@@ -5,7 +5,12 @@ import { HUD } from '../ui/HUD.js'
 
 const WORLD_W = 1400
 const WORLD_H = 1400
-const FOG_RADIUS = 280
+
+// Радиус зависит от размера экрана
+function getFogRadius() {
+  const isMobile = window.innerWidth < 768
+  return isMobile ? 160 : 280
+}
 
 export class GameScene extends Phaser.Scene {
   constructor() {
@@ -130,17 +135,17 @@ export class GameScene extends Phaser.Scene {
 
   // ─── Туман войны ─────────────────────────────────────────
   createFog() {
-    this._buildFogTexture()
+  this.fogRadius = getFogRadius() // сохраняем в this
+  this._buildFogTexture()
 
-    // Спрайт тумана — зафиксирован на экране, двигаем вручную
-    this.fogSprite = this.add.image(0, 0, 'fog')
-    this.fogSprite.setDepth(50)
-    this.fogSprite.setScrollFactor(0)
-    this.fogSprite.setOrigin(0.5, 0.5)
-  }
+  this.fogSprite = this.add.image(0, 0, 'fog')
+  this.fogSprite.setDepth(50)
+  this.fogSprite.setScrollFactor(0)
+  this.fogSprite.setOrigin(0.5, 0.5)
+}
 
-  _buildFogTexture() {
-  // Берём размер экрана с двойным запасом — гарантированно покрывает всё
+_buildFogTexture() {
+  const FOG_R = this.fogRadius  // используем this.fogRadius везде
   const size = Math.max(window.innerWidth, window.innerHeight) * 2.5
   const cx = size / 2
   const cy = size / 2
@@ -150,13 +155,11 @@ export class GameScene extends Phaser.Scene {
   canvas.height = size
   const ctx = canvas.getContext('2d')
 
-  // Белый фон — туман
   ctx.fillStyle = 'rgba(236, 232, 220, 1)'
   ctx.fillRect(0, 0, size, size)
 
-  // Вырезаем круг с мягким краем
-  const innerR = FOG_RADIUS * 0.6
-  const outerR = FOG_RADIUS * 1.4
+  const innerR = FOG_R * 0.6
+  const outerR = FOG_R * 1.4
 
   const grad = ctx.createRadialGradient(cx, cy, innerR, cx, cy, outerR)
   grad.addColorStop(0,    'rgba(0,0,0, 1)')
