@@ -140,41 +140,50 @@ export class GameScene extends Phaser.Scene {
   }
 
   _buildFogTexture() {
-    // Размер с запасом — покрывает любой экран
-    const size = 1400
-    const cx = size / 2
-    const cy = size / 2
+  // Берём размер экрана с двойным запасом — гарантированно покрывает всё
+  const size = Math.max(window.innerWidth, window.innerHeight) * 2.5
+  const cx = size / 2
+  const cy = size / 2
 
-    const canvas = document.createElement('canvas')
-    canvas.width = size
-    canvas.height = size
-    const ctx = canvas.getContext('2d')
+  const canvas = document.createElement('canvas')
+  canvas.width = size
+  canvas.height = size
+  const ctx = canvas.getContext('2d')
 
-    // Шаг 1 — белый непрозрачный фон (это и есть туман)
-    ctx.fillStyle = 'rgba(236, 232, 220, 1)'
-    ctx.fillRect(0, 0, size, size)
+  // Белый фон — туман
+  ctx.fillStyle = 'rgba(236, 232, 220, 1)'
+  ctx.fillRect(0, 0, size, size)
 
-    // Шаг 2 — вырезаем круг с мягким краем
-    // destination-out стирает пиксели там где рисуем
-    const innerR = FOG_RADIUS * 0.6  // начало блюра
-    const outerR = FOG_RADIUS * 1.4  // конец блюра
+  // Вырезаем круг с мягким краем
+  const innerR = FOG_RADIUS * 0.6
+  const outerR = FOG_RADIUS * 1.4
 
-    const grad = ctx.createRadialGradient(cx, cy, innerR, cx, cy, outerR)
-    grad.addColorStop(0,    'rgba(0,0,0, 1)')    // полностью прозрачно — видно игру
-    grad.addColorStop(0.4,  'rgba(0,0,0, 0.98)')
-    grad.addColorStop(0.65, 'rgba(0,0,0, 0.85)')
-    grad.addColorStop(0.82, 'rgba(0,0,0, 0.5)')
-    grad.addColorStop(0.93, 'rgba(0,0,0, 0.15)')
-    grad.addColorStop(1,    'rgba(0,0,0, 0)')    // полностью туман
+  const grad = ctx.createRadialGradient(cx, cy, innerR, cx, cy, outerR)
+  grad.addColorStop(0,    'rgba(0,0,0, 1)')
+  grad.addColorStop(0.4,  'rgba(0,0,0, 0.98)')
+  grad.addColorStop(0.65, 'rgba(0,0,0, 0.85)')
+  grad.addColorStop(0.82, 'rgba(0,0,0, 0.5)')
+  grad.addColorStop(0.93, 'rgba(0,0,0, 0.15)')
+  grad.addColorStop(1,    'rgba(0,0,0, 0)')
 
-    ctx.globalCompositeOperation = 'destination-out'
-    ctx.fillStyle = grad
-    ctx.fillRect(0, 0, size, size)
+  ctx.globalCompositeOperation = 'destination-out'
+  ctx.fillStyle = grad
+  ctx.fillRect(0, 0, size, size)
 
-    // Загружаем в Phaser как текстуру
-    if (this.textures.exists('fog')) this.textures.remove('fog')
-    this.textures.addCanvas('fog', canvas)
-  }
+  if (this.textures.exists('fog')) this.textures.remove('fog')
+  this.textures.addCanvas('fog', canvas)
+}
+
+updateFog() {
+  // worldView даёт точные координаты видимой области
+  const cam = this.cameras.main
+
+  // Позиция игрока относительно левого верхнего угла камеры
+  const sx = this.player.x - cam.worldView.x
+  const sy = this.player.y - cam.worldView.y
+
+  this.fogSprite.setPosition(sx, sy)
+}
 
   updateFog() {
     const cam = this.cameras.main
